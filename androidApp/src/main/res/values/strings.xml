@@ -1,0 +1,88 @@
+<resources>
+    <string name="app_name">Smart Mirror</string>
+
+    <!-- Permission onboarding / denied / blocked (MVP-12) -->
+    <string name="onboarding_title">Your pocket mirror</string>
+    <string name="onboarding_body">Smart Mirror uses your front camera. Nothing is recorded or sent anywhere.</string>
+    <string name="onboarding_allow">Turn on camera</string>
+    <string name="denied_title">Camera access needed</string>
+    <string name="denied_body">Smart Mirror can\'t show your reflection without the front camera. Nothing is recorded or sent anywhere.</string>
+    <string name="denied_try_again">Try again</string>
+    <string name="open_settings">Open Settings</string>
+    <string name="blocked_body">Camera access is turned off. Open Settings, tap Permissions, then allow Camera.</string>
+    <string name="overheated_title">Device is hot</string>
+    <string name="overheated_body">The mirror is paused so your device can cool down. It resumes automatically.</string>
+
+    <!-- Camera errors -->
+    <string name="camera_error_title">Camera problem</string>
+    <string name="camera_error_no_front">This device has no front camera.</string>
+    <string name="camera_error_unknown">The camera couldn\'t start.</string>
+    <string name="camera_error_disconnected">The camera was disconnected.</string>
+    <string name="camera_unavailable_title">Camera unavailable</string>
+    <string name="camera_unavailable_body">Another app is using the camera. The mirror resumes automatically when it\'s free.</string>
+    <string name="retry">Retry</string>
+
+    <!-- Mirror screen -->
+    <string name="preview_description">Mirror preview</string>
+    <string name="preview_frozen_description">Frozen mirror image</string>
+    <string name="action_show_controls">Show controls</string>
+    <string name="action_hide_controls">Hide controls</string>
+    <string name="tap_hint">Tap for controls</string>
+    <string name="zoom_value">%1$.1fx</string>
+    <string name="mode_mirror">Mirror</string>
+    <string name="mode_true_view">True view</string>
+    <string name="frozen_label">Frozen</string>
+    <string name="resume">Resume</string>
+
+    <!-- Controls -->
+    <string name="control_zoom">Zoom</string>
+    <string name="control_exposure">Exposure</string>
+    <string name="control_light">Light</string>
+    <string name="control_capture">Take photo</string>
+    <string name="control_freeze">Freeze</string>
+    <string name="control_unfreeze">Resume live mirror</string>
+    <string name="control_mirror_on">Showing mirror view. Switch to true view</string>
+    <string name="control_true_view_on">Showing true view. Switch to mirror view</string>
+    <string name="control_light_on">Ring light on. Turn off</string>
+    <string name="control_light_off">Ring light off. Turn on</string>
+    <string name="control_settings">Settings</string>
+    <string name="control_exposure_reset">Reset exposure</string>
+    <string name="exposure_value">%1$+.1f EV</string>
+    <string name="zoom_preset">%1$.0fx</string>
+    <string name="zoom_preset_description">Zoom %1$.0fx</string>
+    <string name="light_intensity">Brightness</string>
+    <string name="light_intensity_value">%1$d%%</string>
+    <string name="intensity_low">Low</string>
+    <string name="intensity_medium">Medium</string>
+    <string name="intensity_high">High</string>
+    <string name="warmth_cool">Cool</string>
+    <string name="warmth_daylight">Daylight</string>
+    <string name="warmth_warm">Warm</string>
+    <string name="light_warmth">Warmth</string>
+
+    <!-- Messages -->
+    <string name="message_saved">Photo saved</string>
+    <string name="message_capture_failed">Couldn\'t take the photo. Try again.</string>
+    <string name="message_save_permission">Allow storage access in Settings to save photos.</string>
+    <string name="message_storage_full">Not enough storage to save the photo.</string>
+    <string name="message_thermal">Device is warm. Brightness and frame rate are reduced.</string>
+    <string name="message_action_settings">Settings</string>
+    <string name="dismiss">Dismiss</string>
+
+    <!-- Settings sheet (MVP-15) -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_auto_brightness">Auto max brightness</string>
+    <string name="settings_auto_brightness_summary">Brighten the screen while the mirror is open</string>
+    <string name="settings_reset">Reset to defaults</string>
+    <string name="settings_reset_done">Settings reset</string>
+    <string name="settings_privacy_title">Privacy</string>
+    <string name="settings_privacy_body">Smart Mirror works entirely on your device. It has no account, no internet access and no analytics. Camera frames are never stored or sent anywhere. Photos are saved only when you tap the capture button.</string>
+    <string name="settings_version">Version %1$s</string>
+    <string name="settings_licenses">Open-source licenses</string>
+    <string name="settings_support">Contact support</string>
+    <string name="settings_close">Close</string>
+    <string name="licenses_body">Smart Mirror is built with open-source software licensed under the Apache License 2.0:\n\n• AndroidX (Jetpack Compose, CameraX, Lifecycle, Activity, Core)\n• Material Components for Compose\n• Kotlin and kotlinx.coroutines\n\nFull license text: Apache License, Version 2.0.</string>
+    <!-- TODO(product): replace with the real support address before release. -->
+    <string name="support_email" translatable="false">support@example.com</string>
+    <string name="support_subject">Smart Mirror feedback</string>
+</resources>

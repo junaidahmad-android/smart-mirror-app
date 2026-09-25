@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
+	<key>CFBundleDisplayName</key>
+	<string>Smart Mirror</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Smart Mirror uses the front camera to show you a live mirror. Nothing is recorded or sent anywhere.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Smart Mirror saves the photos you take to your library. It never reads your existing photos.</string>
+	<key>UIRequiresFullScreen</key>
+	<true/>
+	<key>UIStatusBarHidden</key>
+	<true/>
+</dict>
+</plist>

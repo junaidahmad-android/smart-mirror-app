@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Smart Mirror privacy manifest (QA-BUG-04, MVP-13.AC3, NFR-11).
+  No tracking, no tracking domains, no collected data. Required-reason APIs actually linked
+  (verified with `nm -u` on the app binary, including the static SharedLogic framework):
+    - NSUserDefaults (settings via UserDefaultsKeyValueStore): CA92.1, app-only read/write.
+  Re-check this list when adding dependencies (file timestamps, boot time, disk space, keyboards).
+-->
+<plist version="1.0">
+<dict>
+	<key>NSPrivacyTracking</key>
+	<false/>
+	<key>NSPrivacyTrackingDomains</key>
+	<array/>
+	<key>NSPrivacyCollectedDataTypes</key>
+	<array/>
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array>
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>CA92.1</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

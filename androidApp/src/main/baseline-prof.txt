@@ -1,0 +1,18 @@
+# App baseline profile (NFR-01 cold start, QA-BUG-11). AGP compiles this into the APK and
+# androidx.profileinstaller installs it, so the startup path is AOT-compiled on first launch.
+# Library profiles (Compose, CameraX, Lifecycle) ship with those libraries.
+# Hand-written wildcard rules covering the cold-start path; regenerate with a Macrobenchmark
+# BaselineProfileRule module when one is added.
+HSPLcom/smart/mirror/app/SmartMirrorApplication;->**(**)**
+HSPLcom/smart/mirror/app/MainActivity**;->**(**)**
+HSPLcom/smart/mirror/app/MirrorHostViewModel**;->**(**)**
+HSPLcom/smart/mirror/app/platform/**;->**(**)**
+HSPLcom/smart/mirror/app/ui/**;->**(**)**
+HSPLcom/smart/mirror/app/di/**;->**(**)**
+HSPLcom/smart/mirror/app/data/**;->**(**)**
+HSPLcom/smart/mirror/app/domain/**;->**(**)**
+HSPLcom/smart/mirror/app/presentation/**;->**(**)**
+HSPLcom/smart/mirror/app/processing/**;->**(**)**
+HSPLandroidx/camera/**;->**(**)**
+Lcom/smart/mirror/app/**;
+Landroidx/camera/**;
