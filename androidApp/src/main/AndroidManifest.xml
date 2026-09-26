@@ -2,6 +2,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- CAMERA implies a required rear camera; the app only uses the front one and shows an
+         error screen when none exists, so neither is a hard install requirement. -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.front" android:required="false" />
     <uses-permission android:name="android.permission.CAMERA" />
     <!-- Only needed to save photos on API < 29; MediaStore needs no permission on 29+. -->

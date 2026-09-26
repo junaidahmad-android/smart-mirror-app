@@ -20,6 +20,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.rule.GrantPermissionRule
 import com.smart.mirror.app.domain.model.CameraStatus
+import com.smart.mirror.app.domain.model.CaptureStatus
 import com.smart.mirror.app.ui.mirror.MirrorTestTags
 import org.junit.After
 import org.junit.Rule
@@ -43,7 +44,10 @@ class QaEndToEndTest {
     private val composeRule = createAndroidComposeRule<MainActivity>()
 
     @get:Rule
-    val rules: RuleChain = RuleChain.outerRule(GrantPermissionRule.grant(Manifest.permission.CAMERA)).around(composeRule)
+    val rules: RuleChain = RuleChain
+        .outerRule(GrantPermissionRule.grant(Manifest.permission.CAMERA))
+        .around(ResetAppSettingsRule()) // fresh-install settings before the Activity starts
+        .around(composeRule)
 
     private val startedAt = System.currentTimeMillis()
 
@@ -56,7 +60,7 @@ class QaEndToEndTest {
     }
 
     private fun waitForCamera() {
-        composeRule.waitUntil(20_000) {
+        composeRule.waitUntil(E2eTimeouts.CAMERA_START_MS) {
             composeRule.onAllNodes(hasTestTag(MirrorTestTags.SCREEN)).fetchSemanticsNodes().isNotEmpty() &&
                 vm().state.value.cameraStatus == CameraStatus.RUNNING
         }
@@ -64,30 +68,42 @@ class QaEndToEndTest {
 
     private fun showControls() {
         if (!vm().state.value.controlsVisible) composeRule.onNodeWithTag(MirrorTestTags.PREVIEW).performClick()
-        composeRule.waitUntil(15_000) {
-            composeRule.onAllNodes(hasContentDescription("Take photo") and isEnabled()).fetchSemanticsNodes().isNotEmpty()
+        waitForCaptureReady()
+    }
+
+    /** Controls shown, no capture in flight, shutter enabled. */
+    private fun waitForCaptureReady() {
+        composeRule.waitUntil(E2eTimeouts.SAVE_MS) {
+            vm().state.value.captureStatus == CaptureStatus.IDLE &&
+                composeRule.onAllNodes(hasContentDescription("Take photo") and isEnabled()).fetchSemanticsNodes().isNotEmpty()
         }
     }
 
     @Test
     fun frozenCapture_savedPhotoMatchesScreen_inMirrorAndTrueView() {
         waitForCamera()
+        assertTrue(vm().state.value.previewMirrored, "precondition: starts in mirror view (defaults)")
         showControls()
         composeRule.onNodeWithContentDescription("Freeze").performClick()
-        composeRule.waitUntil(5_000) { vm().frozenFrame.value != null }
+        composeRule.waitUntil(E2eTimeouts.UI_MS) { vm().frozenFrame.value != null }
         val frozen = vm().frozenFrame.value!!
 
         // 1. Mirror mode: the saved JPEG must equal the frozen frame as displayed (scaleX = +1).
         composeRule.onNodeWithTag(MirrorTestTags.CAPTURE).performClick()
-        composeRule.waitUntil(15_000) { savedPhotos().size == 1 }
+        composeRule.waitUntil(E2eTimeouts.SAVE_MS) { savedPhotos().size == 1 }
+        // The MediaStore row can appear before the capture callback; wait for the capture to finish.
+        waitForCaptureReady()
 
         // 2. True view (toggle while frozen): the saved JPEG must be the horizontal flip.
-        composeRule.onNodeWithContentDescription("Showing mirror view. Switch to true view").performClick()
-        composeRule.waitUntil(5_000) {
-            composeRule.onAllNodes(hasContentDescription("Take photo") and isEnabled()).fetchSemanticsNodes().isNotEmpty()
+        composeRule.waitUntil(E2eTimeouts.UI_MS) {
+            composeRule.onAllNodes(hasContentDescription("Showing mirror view. Switch to true view") and isEnabled())
+                .fetchSemanticsNodes().isNotEmpty()
         }
+        composeRule.onNodeWithContentDescription("Showing mirror view. Switch to true view").performClick()
+        composeRule.waitUntil(E2eTimeouts.UI_MS) { !vm().state.value.previewMirrored }
+        waitForCaptureReady()
         composeRule.onNodeWithTag(MirrorTestTags.CAPTURE).performClick()
-        composeRule.waitUntil(15_000) { savedPhotos().size == 2 }
+        composeRule.waitUntil(E2eTimeouts.SAVE_MS) { savedPhotos().size == 2 }
 
         val (mirrorUri, trueUri) = savedPhotos().let { it[0] to it[1] }
         val mirrorPhoto = decode(mirrorUri)
@@ -110,7 +126,7 @@ class QaEndToEndTest {
         waitForCamera()
         showControls()
         composeRule.onNodeWithTag(MirrorTestTags.CAPTURE).performClick()
-        composeRule.waitUntil(15_000) { savedPhotos().size == 1 }
+        composeRule.waitUntil(E2eTimeouts.SAVE_MS) { savedPhotos().size == 1 }
         val uri = savedPhotos().single()
         val resolver = composeRule.activity.contentResolver
         resolver.query(uri, arrayOf(MediaStore.MediaColumns.MIME_TYPE, MediaStore.MediaColumns.RELATIVE_PATH), null, null, null)!!.use {
@@ -156,14 +172,21 @@ class QaEndToEndTest {
     @Test
     fun autoMaxBrightnessOff_leavesUserBrightnessAlone() {
         waitForCamera()
+        // Preconditions from the reset defaults: auto max brightness on, ring light off (the ring
+        // light also forces max brightness, so a leaked "ring light on" would mask this AC).
+        val settings = vm().state.value.settings
+        assertTrue(settings.autoMaxBrightness && !settings.ringLight.enabled, "precondition: default settings, was $settings")
+        composeRule.waitUntil(E2eTimeouts.UI_MS) { composeRule.activity.window.attributes.screenBrightness == 1f }
+
         composeRule.runOnUiThread { vm().onIntent(com.smart.mirror.app.presentation.mirror.MirrorIntent.SetAutoMaxBrightness(false)) }
-        composeRule.waitForIdle()
-        try {
-            assertEquals(WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE, composeRule.activity.window.attributes.screenBrightness, "MVP-06.AC4")
-        } finally {
-            composeRule.runOnUiThread { vm().onIntent(com.smart.mirror.app.presentation.mirror.MirrorIntent.ResetSettingsToDefaults) }
-            composeRule.waitForIdle()
+        // Wait for the state and its port effect instead of waitForIdle() (which only tracks
+        // Compose/Espresso idleness, not the ViewModel's side effects on the Window).
+        composeRule.waitUntil(E2eTimeouts.UI_MS) {
+            vm().state.value.brightnessLevel == null &&
+                composeRule.activity.window.attributes.screenBrightness == WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
         }
+        assertEquals(WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE, composeRule.activity.window.attributes.screenBrightness, "MVP-06.AC4")
+        // Settings are restored to defaults by ResetAppSettingsRule after the test.
     }
 
     // --- helpers -----------------------------------------------------------------------------------

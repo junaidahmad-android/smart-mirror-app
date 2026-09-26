@@ -40,6 +40,7 @@ class MainActivityEndToEndTest {
     @get:Rule
     val rules: RuleChain = RuleChain
         .outerRule(GrantPermissionRule.grant(Manifest.permission.CAMERA))
+        .around(ResetAppSettingsRule()) // fresh-install settings before the Activity starts
         .around(composeRule)
 
     private val startedAt = System.currentTimeMillis()
@@ -52,26 +53,30 @@ class MainActivityEndToEndTest {
         return vm!!
     }
 
+    private fun waitForScreen() {
+        composeRule.waitUntil(E2eTimeouts.SCREEN_MS) {
+            composeRule.onAllNodes(hasTestTag(MirrorTestTags.SCREEN)).fetchSemanticsNodes().isNotEmpty()
+        }
+    }
+
     private fun waitForCamera() {
-        composeRule.waitUntil(15_000) { hostViewModel().state.value.cameraStatus == CameraStatus.RUNNING }
+        composeRule.waitUntil(E2eTimeouts.CAMERA_START_MS) { hostViewModel().state.value.cameraStatus == CameraStatus.RUNNING }
     }
 
     @Test
     fun launch_showsLiveMirror_tapShowsControls_captureSaves() {
-        composeRule.waitUntil(10_000) {
-            composeRule.onAllNodes(hasTestTag(MirrorTestTags.SCREEN)).fetchSemanticsNodes().isNotEmpty()
-        }
+        waitForScreen()
         assertEquals(MirrorScreen.MIRROR, hostViewModel().state.value.screen)
         waitForCamera()
         assertTrue(hostViewModel().state.value.previewMirrored, "mirrored by default (MVP-01.AC2)")
         composeRule.onNodeWithTag(MirrorTestTags.CONTROLS).assertDoesNotExist()
 
         composeRule.onNodeWithTag(MirrorTestTags.PREVIEW).performClick()
-        composeRule.waitUntil(5_000) {
+        composeRule.waitUntil(E2eTimeouts.UI_MS) {
             composeRule.onAllNodes(hasContentDescription("Take photo") and isEnabled()).fetchSemanticsNodes().isNotEmpty()
         }
         composeRule.onNodeWithContentDescription("Take photo").assertIsDisplayed().performClick()
-        composeRule.waitUntil(15_000) {
+        composeRule.waitUntil(E2eTimeouts.SAVE_MS) {
             composeRule.onAllNodes(hasTestTag(MirrorTestTags.MESSAGE)).fetchSemanticsNodes().isNotEmpty()
         }
         composeRule.onNodeWithTag(MirrorTestTags.MESSAGE).assert(SemanticsMatcher.expectValue(
@@ -83,21 +88,19 @@ class MainActivityEndToEndTest {
 
     @Test
     fun freeze_showsFrozenFrame_andResumes() {
-        composeRule.waitUntil(10_000) {
-            composeRule.onAllNodes(hasTestTag(MirrorTestTags.SCREEN)).fetchSemanticsNodes().isNotEmpty()
-        }
+        waitForScreen()
         waitForCamera()
         composeRule.onNodeWithTag(MirrorTestTags.PREVIEW).performClick()
-        composeRule.waitUntil(5_000) {
+        composeRule.waitUntil(E2eTimeouts.UI_MS) {
             composeRule.onAllNodes(hasContentDescription("Freeze") and isEnabled()).fetchSemanticsNodes().isNotEmpty()
         }
         composeRule.onNodeWithContentDescription("Freeze").performClick()
-        composeRule.waitUntil(5_000) {
+        composeRule.waitUntil(E2eTimeouts.UI_MS) {
             composeRule.onAllNodes(hasTestTag(MirrorTestTags.FROZEN_IMAGE)).fetchSemanticsNodes().isNotEmpty()
         }
         composeRule.onNodeWithTag(MirrorTestTags.FROZEN_BADGE).assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Resume live mirror").performClick()
-        composeRule.waitUntil(5_000) {
+        composeRule.waitUntil(E2eTimeouts.UI_MS) {
             composeRule.onAllNodes(hasTestTag(MirrorTestTags.FROZEN_IMAGE)).fetchSemanticsNodes().isEmpty()
         }
         assertEquals(CameraStatus.RUNNING, hostViewModel().state.value.cameraStatus)
@@ -105,9 +108,7 @@ class MainActivityEndToEndTest {
 
     @Test
     fun rotation_keepsActivityAndCamera_andSwitchesToSideRail() {
-        composeRule.waitUntil(10_000) {
-            composeRule.onAllNodes(hasTestTag(MirrorTestTags.SCREEN)).fetchSemanticsNodes().isNotEmpty()
-        }
+        waitForScreen()
         waitForCamera()
         val before = composeRule.activity
         composeRule.onNodeWithTag(MirrorTestTags.PREVIEW).performClick()
@@ -115,10 +116,12 @@ class MainActivityEndToEndTest {
             composeRule.activityRule.scenario.onActivity {
                 it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
             }
-            composeRule.waitUntil(10_000) {
-                composeRule.activity.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+            // Wait on the observable end state (configuration applied and the side rail composed),
+            // not on waitForIdle(), which does not cover the rotation's async layout pass.
+            composeRule.waitUntil(E2eTimeouts.UI_MS) {
+                composeRule.activity.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE &&
+                    composeRule.onAllNodes(hasTestTag(MirrorTestTags.SIDE_RAIL)).fetchSemanticsNodes().isNotEmpty()
             }
-            composeRule.waitForIdle()
             assertSame(before, composeRule.activity, "rotation is handled in place, no recreation (MVP-10.AC2)")
             assertEquals(CameraStatus.RUNNING, hostViewModel().state.value.cameraStatus)
             composeRule.onNodeWithTag(MirrorTestTags.SIDE_RAIL).assertIsDisplayed()

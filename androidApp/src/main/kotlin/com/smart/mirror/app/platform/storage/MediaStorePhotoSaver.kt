@@ -1,6 +1,7 @@
 package com.smart.mirror.app.platform.storage
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.ContentValues
 import android.content.Context
 import android.content.pm.PackageManager
@@ -87,6 +88,9 @@ class MediaStorePhotoSaver(
                     return@execute
                 }
                 val outcome = try {
+                    // sdkInt defaults to Build.VERSION.SDK_INT and is only injected by tests, so the
+                    // check is real; lint just can't see through the parameter.
+                    @SuppressLint("NewApi")
                     val uri = if (sdkInt >= Build.VERSION_CODES.Q) insertScoped(bytes) else insertLegacy(bytes)
                     SaveOutcome.Saved(uri.toString())
                 } catch (e: IOException) {

@@ -1,0 +1,151 @@
+name: Release
+
+# CD. Builds a release AAB and an iOS archive for version tags (v1.2.3) or on demand.
+# Signing and store uploads only happen when the matching secrets exist; without them every
+# step still builds (unsigned) and the uploads are skipped, so the workflow never fails for a
+# missing secret. See docs/CI_CD.md for the secrets table.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      upload:
+        description: Upload to Play Internal / TestFlight (only if the secrets are configured)
+        type: boolean
+        default: false
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CI: "true"
+  # Tags upload automatically; manual runs only when asked.
+  WANT_UPLOAD: ${{ github.event_name == 'push' || inputs.upload == true }}
+
+jobs:
+  android-release:
+    name: Android release AAB
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: zulu
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v5
+        with:
+          cache-read-only: true
+      - name: Version from tag / run number
+        run: |
+          echo "ANDROID_VERSION_CODE=$(( 1000 + GITHUB_RUN_NUMBER ))" >> "$GITHUB_ENV"
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then echo "ANDROID_VERSION_NAME=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"; fi
+      - name: Privacy guard (release manifest)
+        run: scripts/ci/privacy-guard.sh --android-only
+      - name: Build release bundle (signed if secrets are present)
+        id: build
+        run: scripts/ci/android-release.sh
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-release-aab
+          path: |
+            androidApp/build/outputs/bundle/release/*.aab
+            androidApp/build/outputs/mapping/release/mapping.txt
+          if-no-files-found: error
+      - name: Upload to Google Play (internal track)
+        if: env.WANT_UPLOAD == 'true' && steps.build.outputs.signed == 'true' && env.PLAY_SERVICE_ACCOUNT_JSON != ''
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.smart.mirror.app
+          releaseFiles: androidApp/build/outputs/bundle/release/androidApp-release.aab
+          mappingFile: androidApp/build/outputs/mapping/release/mapping.txt
+          track: internal
+          status: draft
+      - name: Summary
+        run: |
+          {
+            echo "### Android release"
+            echo "- signed: ${{ steps.build.outputs.signed }}"
+            if [[ "${{ steps.build.outputs.signed }}" != "true" ]]; then echo "- Signing secrets missing: unsigned AAB built, upload skipped."; fi
+            if [[ -z "$PLAY_SERVICE_ACCOUNT_JSON" ]]; then echo "- PLAY_SERVICE_ACCOUNT_JSON missing: Play upload skipped."; fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  ios-release:
+    name: iOS archive
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      XCODE_VERSION: "26.6"
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      IOS_BUNDLE_ID: ${{ secrets.IOS_BUNDLE_ID }}
+      IOS_DIST_CERT_P12_BASE64: ${{ secrets.IOS_DIST_CERT_P12_BASE64 }}
+      IOS_DIST_CERT_PASSWORD: ${{ secrets.IOS_DIST_CERT_PASSWORD }}
+      IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+      ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+      ASC_KEY_P8_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8_BASE64 }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: ${{ env.XCODE_VERSION }}
+      - uses: actions/setup-java@v5
+        with:
+          distribution: zulu
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v5
+        with:
+          cache-read-only: true
+      - name: Kotlin/Native cache (~/.konan)
+        uses: actions/cache@v4
+        with:
+          path: ~/.konan
+          key: konan-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('gradle/libs.versions.toml') }}
+          restore-keys: konan-${{ runner.os }}-${{ runner.arch }}-
+      - name: Version from tag / run number
+        run: |
+          echo "IOS_BUILD_NUMBER=$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then echo "IOS_MARKETING_VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"; fi
+      - name: Archive (+ signed export when secrets are present)
+        id: build
+        run: scripts/ci/ios-release.sh
+      - name: Upload archive / IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-release
+          path: |
+            build/ios/release/export/*.ipa
+            build/ios/release/exportOptions.plist
+            build/ios/release/Smartmirrorapp.xcarchive/dSYMs/
+          if-no-files-found: warn
+      - name: Upload to TestFlight
+        if: env.WANT_UPLOAD == 'true' && steps.build.outputs.signed == 'true' && env.ASC_KEY_ID != '' && env.ASC_ISSUER_ID != '' && env.ASC_KEY_P8_BASE64 != ''
+        env:
+          IPA: ${{ steps.build.outputs.ipa }}
+        run: |
+          mkdir -p ~/.appstoreconnect/private_keys
+          key_file=~/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8
+          printf '%s' "$ASC_KEY_P8_BASE64" | base64 --decode > "$key_file"
+          trap 'rm -f "$key_file"' EXIT
+          xcrun altool --upload-app --type ios --file "$IPA" --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
+      - name: Summary
+        run: |
+          {
+            echo "### iOS release"
+            echo "- signed: ${{ steps.build.outputs.signed }}"
+            if [[ "${{ steps.build.outputs.signed }}" != "true" ]]; then echo "- Signing secrets missing: unsigned archive only, no IPA, upload skipped."; fi
+            if [[ -z "$ASC_KEY_ID" ]]; then echo "- App Store Connect API key missing: TestFlight upload skipped."; fi
+          } >> "$GITHUB_STEP_SUMMARY"
